@@ -12,7 +12,7 @@ dev.off()  # But only if there IS a plot
 cat("\014")  # ctrl+L
 
 getwd()
-setwd("U:/My Docs/Data Science/14 weeks training/Projects/Fraud Prevention/rstudio")
+setwd("D:/Data Science/git projects/fraud-prevention/anlytics using R")
 
 ### Task 1: Consolidate data into one table
 
