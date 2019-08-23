@@ -71,11 +71,7 @@ library('dplyr')
 library('psych')
 
 # check if categorial data have unknown/unidentified values
-distinct(TFraud, age, .keep_all = FALSE) #dplyr
-
-# filter data for each group, if needed
-TFraud_control <- filter(TFraud, group == 'Control')
-TFraud_test <- filter(TFraud, group == 'Test')
+distinct(TFraud, sex, .keep_all = FALSE) #dplyr
 
 glimpse(TFraud) # dplyr
 describe(TFraud) #psych
@@ -84,7 +80,7 @@ describe(TFraud) #psych
 
 # first convert categorical features to numeric
 TFraudNum <- select(TFraud, "date","source","device","payee","browser","sex","age",
-                     "industry_code","group","trial")
+                     "industry_code","group","fraud")
 directions <- NULL
 directions.factor <- NULL
 directions <- TFraudNum$group
@@ -92,13 +88,13 @@ directions.factor <- factor(directions)
 TFraudNum$group <- as.numeric(directions.factor)
 # TFraudNum$date <- as.numeric(as.character(as.Date(directions.factor, format = '%m/%d/%Y'), format = '%Y%m%d'))
 
-# write.csv(TFraudNum,file = "merged_trial_results_numMap.csv")
+# write.csv(TFraudNum,file = "merged_fraud_results_numMap.csv")
 
-TFraudNum <- read.csv('merged_trial_results_numMap.csv')
+TFraudNum <- read.csv('merged_fraud_results_numMap.csv')
 
 str(TFraudNum)
 names(TFraudNum)
-cor(TFraudNum, TFraudNum$trial, use = 'complete.obs')
+cor(TFraudNum, TFraudNum$fraud, use = 'complete.obs')
 
 # not much information in correlation with mapping, re-try with dummy variables
 
@@ -107,12 +103,12 @@ library('dummies')
 # create dummies for all factor variables in TFraud
 str(TFraud)
 names(TFraud)
-TFraud.dummy <- dummy.data.frame(select(TFraud, "date","source","device","payee","browser","sex", "age", "industry_code","group","trial"),
+TFraud.dummy <- dummy.data.frame(select(TFraud, "date","source","device","payee","browser","sex", "age", "industry_code","group","fraud"),
                                   names = c("date","source","device","payee","browser","sex","industry_code","group"), 
                                   sep = '.')
 names(TFraud.dummy)
 
-cor(TFraud.dummy,TFraud.dummy$trial, use = 'complete.obs')
+cor(TFraud.dummy,TFraud.dummy$fraud, use = 'complete.obs')
 
 # now select (n-1) & aggregate dummy variables
 newTFraud.dummy <- select(TFraud.dummy, "date.1/10/2017", "date.1/3/2017", "date.1/4/2017", "date.1/5/2017", "date.1/6/2017", "date.1/7/2017", "date.1/8/2017", "date.1/9/2017",
@@ -123,7 +119,7 @@ newTFraud.dummy <- select(TFraud.dummy, "date.1/10/2017", "date.1/3/2017", "date
        "sex.F", 
        "age",
        "industry_code.AOR", "industry_code.BOR", "industry_code.CIL", "industry_code.DUR", "industry_code.GRT", "industry_code.ICG", "industry_code.LPC", "industry_code.LPK", "industry_code.LPP", "industry_code.MFE", "industry_code.MFG", "industry_code.PGG", "industry_code.PWO", "industry_code.RCA", "industry_code.RGA", "industry_code.SPC", "industry_code.TRV",
-       "group.Control", "trial")
+       "group.Control", "fraud")
 
 newTFraud.dummy <- newTFraud.dummy %>% 
   transmute(date = rowSums(.[grep("date.*", names(.))], na.rm = TRUE),
@@ -135,14 +131,14 @@ newTFraud.dummy <- newTFraud.dummy %>%
          age = age,
          industry = rowSums(.[grep("industry_code.*", names(.))], na.rm = TRUE),
          group = group.Control,
-         trial = trial
+         fraud = fraud
          )
 
 distinct(newTFraud.dummy$industry)
 
-# write.csv(newTFraud.dummy,file = "merged_trial_results_dummy.csv")
+# write.csv(newTFraud.dummy,file = "merged_fraud_results_dummy.csv")
 
-cor(newTFraud.dummy, newTFraud.dummy$trial, use = 'complete.obs')
+cor(newTFraud.dummy, newTFraud.dummy$fraud, use = 'complete.obs')
 
 ### Task 3: Data Visualization
 
@@ -150,41 +146,39 @@ library('ggplot2')
 
 # check skewness of numeric feature
 hist(TFraud$age, col = 'red') # histogram
+hist(TFraud$amount, col = 'red') # histogram
 
 plot(density(filter(TFraud, TFraud$age != 'NA')$age)) # kernel desnity plot
 
 # check distribution of categorical features
-barplot(table(TFraud$date), main="date distribution", ylab='Num of dates')
-barplot(table(TFraud$source), main="source distribution", ylab='Num of sources')
-barplot(table(TFraud$device), main="device distribution", ylab='Num of devices')
-barplot(table(TFraud$payee), main="payee distribution", xlab='Type of payee' ,ylab='Num of payees')
+barplot(table(TFraud$store), main="store distribution", ylab='Num of stores')
 barplot(table(TFraud$browser), main="browser distribution", ylab='Num of browsers')
+barplot(table(TFraud$country), main="country distribution", ylab='Num of countries')
 barplot(table(TFraud$sex), main="gender distribution", ylab='Num of genders')
-barplot(table(TFraud$industry_code), main="industry_code distribution", ylab='Num of industry_code')
-barplot(table(TFraud$group), main="group distribution", ylab='Num of group')
-barplot(table(TFraud$trial), main="TV trial distribution", xlab='Trial', ylab='Num of trial')
+barplot(table(TFraud$fraud), main="TV fraud distribution", xlab='fraud', ylab='Num of fraud')
 
 # check Age distribution across ONE categorical feature - using boxplot
-boxplot(TFraud$age ~ TFraud$group, TFraud, xlab = 'Type of group', ylab = 'Age')
-boxplot(TFraud$age ~ TFraud$source, TFraud, xlab = 'Type of source', ylab = 'Age')
-boxplot(TFraud$age ~ TFraud$device, TFraud, xlab = 'Type of devices', ylab = 'Age')
-boxplot(TFraud$age ~ TFraud$payee, TFraud, xlab = 'Type of payee', ylab = 'Age')
-boxplot(TFraud$age ~ TFraud$industry_code, TFraud, xlab = 'Type of industry_code', ylab = 'Age')
+boxplot(TFraud$age ~ TFraud$store, TFraud, xlab = 'Type of store', ylab = 'Age')
+boxplot(TFraud$age ~ TFraud$browser, TFraud, xlab = 'Type of browser', ylab = 'Age')
 boxplot(TFraud$age ~ TFraud$sex, TFraud, xlab = 'Type of gender', ylab = 'Age')
-boxplot(TFraud$age ~ TFraud$trial, TFraud, xlab = 'Type of trial', ylab = 'Age')
+boxplot(TFraud$age ~ TFraud$fraud, TFraud, xlab = 'Type of fraud', ylab = 'Age')
+boxplot(TFraud$amount ~ TFraud$store, TFraud, xlab = 'Type of store', ylab = 'Amount')
+boxplot(TFraud$amount ~ TFraud$browser, TFraud, xlab = 'Type of browser', ylab = 'Amount')
+boxplot(TFraud$amount ~ TFraud$sex, TFraud, xlab = 'Type of gender', ylab = 'Amount')
+boxplot(TFraud$amount ~ TFraud$fraud, TFraud, xlab = 'Type of fraud', ylab = 'Amount')
 
 # scatter plot
 
-corFtrial <- round(cor(TFraudNum, use = 'complete.obs'), 5)
-corFtrial <- cor(TFraudNum, use = 'complete.obs')
-head(corFtrial)
+corFfraud <- round(cor(TFraudNum, use = 'complete.obs'), 5)
+corFfraud <- cor(TFraudNum, use = 'complete.obs')
+head(corFfraud)
 
 # package reshape is required to melt the correlaion matrix:
 library('reshape2')
-melted_corFtrial <- melt(corFtrial)
-head(corFtrial)
+melted_corFfraud <- melt(corFfraud)
+head(corFfraud)
 
-ggplot(melted_corFtrial)
+ggplot(melted_corFfraud)
 
 ### Task 4: How to fix data quality issues
 
@@ -193,5 +187,5 @@ head(log(TFraud$age))
 
 hist(log(TFraud$age, 2), col = 'red') # histogram
 
-# convert trial from int to factor
-TFraud$trial <- factor(TFraud$trial, levels = c(0,1))
+# convert fraud from int to factor
+TFraud$fraud <- factor(TFraud$fraud, levels = c(0,1))
