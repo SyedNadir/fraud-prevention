@@ -12,7 +12,7 @@ dev.off()  # But only if there IS a plot
 cat("\014")  # ctrl+L
 
 getwd()
-setwd("U:/My Docs/Data Science/14 weeks training/Projects/Fraud Prevention/rstudio")
+setwd("D:/Data Science/git projects/fraud-prevention/data")
 
 ### Task 1: Consolidate data into one table
 
@@ -215,15 +215,22 @@ boxplot(TFraud$amount ~ TFraud$fraud, TFraud, xlab = 'Type of fraud', ylab = 'Am
 
 # scatter plot
 
-corFfraud <- round(cor(TFraudNum, use = 'complete.obs'), 5)
-corFfraud <- cor(TFraudNum, use = 'complete.obs')
-head(corFfraud)
+ggplot(TFraud, aes(x=age, y=amount)) + geom_point(na.rm = TRUE, color='blue', alpha=.25)
 
 ### Task 4: How to fix data quality issues
 
 # transform Amount & age to fix skewness - use john tukey ladder
 hist(log(TFraud$age, 10), col = 'red') # histogram
 hist(log(TFraud$amount, 10), col = 'red') # histogram
+
+install.packages("rcompanion")
+library(rcompanion)
+
+### Log-normal distribution example
+hist(transformTukey(TFraudNum$age[1:5000]))
+hist(TFraudNum$age)
+hist(transformTukey(TFraudNum$amount[1:5000]))
+hist(TFraudNum$amount)
 
 # convert fraud from int to factor
 TFraudNum$fraud <- factor(TFraudNum$fraud, levels = c(0,1))
@@ -270,63 +277,179 @@ DTcm = table(test_set[, 12], DTpred)
 
 DTcm  # Type I error - 93, Type II error - 1314
 
-n = sum(DTcm) # number of instances
-nc = nrow(DTcm) # number of classes
-diag = diag(DTcm) # number of correctly classified instances per class 
-rowsums = apply(DTcm, 1, sum) # number of instances per class
-colsums = apply(DTcm, 2, sum) # number of predictions per class
-p = rowsums / n # distribution of instances over the actual classes
-q = colsums / n # distribution of instances over the predicted classes
+model_accuracy <- function(cm, mode='A'){
+  n = sum(cm) # number of instances
+  nc = nrow(cm) # number of classes
+  diag = diag(cm) # number of correctly classified instances per class 
+  rowsums = apply(cm, 1, sum) # number of instances per class
+  colsums = apply(cm, 2, sum) # number of predictions per class
+  p = rowsums / n # distribution of instances over the actual classes
+  q = colsums / n # distribution of instances over the predicted classes
+  
+  ########################## Calculating the Accuracy  ##################################################
+  if(mode=='A')
+    result = sum(diag(cm))/sum(cm) # 95%
+  else {
+    Precision = diag/colsums
+    Recall = diag / rowsums 
+    result = 2 * Precision * Recall / (Precision + Recall)
+  }
+  return(result)
+}
 
-########################## Calculating the Accuracy  ##################################################
-Accuracy = sum(diag(DTcm))/sum(DTcm) # 95%
-Precision = diag/colsums
-Recall = diag / rowsums 
-F1_Score = 2 * Precision * Recall / (Precision + Recall) 
+Accuracy = model_accuracy(NBcm, 'A')
+F1_score = model_accuracy(NBcm, 'F')
 
 ########################## Visualize the Decision Tree  ##################################################
 install.packages("rpart.plot")
 library('rpart.plot')
 rpart.plot(DTmodel, box.palette = "RdBu", shadow.col = "gray", nn=TRUE)
 
-# Build second Model - Naive Bayes
-
-
-# Build third Model - K Neares neighbor
-
-
-# Build fourth Model - Logistic regression
 #######################################################################################################
 ### Feature Scaling
 #######################################################################################################
 
-training_set[-3] = scale(training_set[-12]) 
+training_set[-12] = scale(training_set[-12]) 
 # prediction boundary
-test_set[-3] = scale(test_set[-9])
+test_set[-12] = scale(test_set[-12])
+
+# Build second Model - Naive Bayes
+# first check if assumptions are true: 
+#                     1)input variables are not related (corr=0) and
+#                     2)Input variables are normally distributed
+#1)
+cor(TFraudNum, use = 'complete.obs', method = "pearson")
+cor(TFraudNum, use = 'complete.obs', method = "kendall")
+cor(TFraudNum, use = 'complete.obs', method = "spearman")
+#2)
+hist(TFraudNum$age)
+hist(TFraudNum$amount)
+
+install.packages('e1071')
+
+library(e1071)
+NaiveBayesModel= naiveBayes(x = training_set[-12],
+                            y = training_set$fraud)
+
+#######################################################################################################
+### Predicting the Test set results
+#######################################################################################################
+
+NB_pred = predict(NaiveBayesModel, type = 'class', newdata = test_set[-12])
+
+#######################################################################################################
+### Making the Confusion Matrix
+#######################################################################################################
+
+NBcm = table(test_set[, 12], NB_pred)
+
+NBcm  
+
+Accuracy = model_accuracy(NBcm, 'A')
+F1_score = model_accuracy(NBcm, 'F')
+
+# Build third Model - K Neares neighbor
+#
+# first check if assumptions are true: 
+#          1) transform categorical to numeric
+
+#######################################################################################################
+### Fitting K-NN to the Training set and Predicting the Test set results
+#######################################################################################################
+
+#Re-use previously scaled data in Naive bayes
+
+library(class)
+KNN_pred = knn(train = training_set[, -12],
+               test = test_set[, -12],
+               cl = training_set[, 12],
+               k = 30,
+               prob = TRUE)
+
+#######################################################################################################
+### Making the Confusion Matrix
+#######################################################################################################
+
+KNNcm = table(test_set[, 12], KNN_pred)
+
+KNNcm  # 14 incorrect predictions
+
+Accuracy = model_accuracy(KNNcm, 'A')
+F1_score = model_accuracy(KNNcm, 'F')
+
+
+# Build fourth Model - Logistic regression
+##
+# first check if assumptions are true: 
+#          1) No missing values
+#          2) input must be numeric
+#          3) TV is binary 0/1
+#1)
+TFraudNum[!complete.cases(TFraudNum), ]
 
 #######################################################################################################
 ### Fitting Logistic Regression to the Training set
 #######################################################################################################
 
-LogisticModel = glm(formula = Churned ~ .,
+#Re-use previously scaled data in Naive bayes
+
+LogisticModel = glm(formula = fraud ~ .,
                     family = binomial,
                     data = training_set)
 LogisticModel
 #######################################################################################################
 ### Predicting the Test set results
 #######################################################################################################
-prob_pred = predict(LogisticModel, type = 'response', newdata = test_set[-9]) 
-
+prob_pred = predict(LogisticModel, type = 'response', newdata = test_set[-12]) 
 prob_pred
-
-glm_pred = ifelse(prob_pred > 0.5, 1, 0)  # Transform probabilities into 1 OR 0
-
+# Transform probabilities into 1 OR 0
+glm_pred = ifelse(prob_pred > 0.5, 1, 0)  
 glm_pred
 
 #######################################################################################################
 ### Making the Confusion Matrix
 #######################################################################################################
 
-glmcm = table(test_set[, 9], glm_pred)
+glmcm = table(test_set[, 12], glm_pred)
+glmcm 
 
-glmcm  # 14 incorrect predictions
+Accuracy = model_accuracy(glmcm, 'A')
+F1_score = model_accuracy(glmcm, 'F')
+
+
+
+# Build fifth Model - Support vectore machine (SVM)
+##
+# first check if assumptions are true: 
+#          1) data is linearly separable
+#1)
+ggplot(TFraudNum, aes(x=age, y=amount,color=factor(fraud))) + geom_point()
+# Data is NOT linearly separable...build kernel-SVM
+
+#######################################################################################################
+### Fitting k-SVM to the Training set
+#######################################################################################################
+
+#Re-use previously scaled data in Naive bayes
+
+
+library(e1071)
+
+KSVMModel = svm(formula = fraud ~ .,  # Arg 1
+               data = training_set,  # Arg 2
+               type = 'C-classification', # Arg 3
+               kernel = 'radial')
+
+#######################################################################################################
+### Predicting the Test set results
+#######################################################################################################
+
+KSVM_pred = predict(KSVMModel, newdata = test_set[-12])
+
+#######################################################################################################
+### Making the Confusion Matrix
+#######################################################################################################
+
+KSVMcm = table(test_set[, 12], KSVM_pred)
+
+KSVMcm  # 14 incorrect predictions
